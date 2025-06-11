@@ -1,18 +1,7 @@
-
 // App & API Settings
 export const APP_NAME = "Vidzly.AI";
 export const GEMINI_MODEL_TEXT = 'gemini-2.5-flash-preview-04-17';
 export const GEMINI_MODEL_IMAGE = 'imagen-3.0-generate-002';
-
-// Static fallback values for API keys (used for comparison)
-export const STATIC_GEMINI_API_KEY_FALLBACK = 'YOUR_GEMINI_API_KEY_HERE_IF_NO_ENV'; // Remains for reference if other non-Gemini SDK services might use it.
-export const STATIC_YOUTUBE_API_KEY_FALLBACK = 'YOUR_YOUTUBE_API_KEY_HERE_IF_NO_ENV';
-
-// Effective API keys (resolved from environment or fallback)
-// For Gemini, process.env.API_KEY is used directly by services.
-// YOUTUBE_API_KEY_PLACEHOLDER is for the YouTube service's check.
-export const YOUTUBE_API_KEY_PLACEHOLDER = process.env.YOUTUBE_API_KEY || STATIC_YOUTUBE_API_KEY_FALLBACK;
-
 
 // Timeouts / Delays
 export const MOCK_API_DELAY = 1000; // ms
@@ -25,7 +14,6 @@ export const SAVED_ITEMS_STORAGE_KEY = 'vidzly_saved_items_v1';
 export const VIEW_HISTORY_STORAGE_KEY = 'vidzly_view_history_v1';
 export const THEME_STORAGE_KEY = 'vidzly_theme';
 export const RECENT_SEARCHES_STORAGE_KEY = 'vidzly_recent_searches_v1';
-// export const CUSTOM_LOGO_STORAGE_KEY = 'vidzly_custom_logo'; // Removed
 export const CURATED_FEEDS_STORAGE_KEY = 'vidzly_curated_feeds_v1';
 
 // LocalStorage Keys — Notifications & Engagement
@@ -63,6 +51,10 @@ export const CURATED_FEED_STALE_HOURS = 12;
 export const DEFAULT_LOGO_SVG_STRING = "<svg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'><rect width='100' height='100' fill='white'/><rect x='15' y='15' width='70' height='70' rx='15' ry='15' fill='red'/><path d='M 42.3 30.2 Q 39 28 39 32 L 39 68 Q 39 72 42.3 69.8 L 68.7 52.2 Q 72 50 68.7 47.8 Z' fill='white'/></svg>";
 
 // Default Notification Preferences
+// Note: NotificationPreferences type needs to be imported if it's not already global for this file
+// For simplicity here, assuming NotificationPreferences is available or defined elsewhere.
+// If not, it needs: import { NotificationPreferences } from './types';
+import { NotificationPreferences } from './types'; // Added import
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   allEnabled: true,
   dailyHotContent: true,
@@ -76,13 +68,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
 };
 
 // Badge Definitions
-// Need to import icon components here if they are directly used.
-// For now, assuming they are imported correctly in the files that use ALL_BADGES.
-// To avoid circular dependencies or import issues in constants.ts,
-// it's often better to have such complex objects defined in their own file or service.
-// However, given current structure, we'll keep it, but acknowledge this pattern.
-import { PlayCircleIcon, CollectionIcon, LightBulbIcon } from './components/Icons'; // Adjusted path for root level constants.ts
-import { Badge, BadgeId, NotificationPreferences } from './types'; // Adjusted path for root level constants.ts
+import { PlayCircleIcon, CollectionIcon, LightBulbIcon } from './components/Icons';
+import { Badge, BadgeId } from './types';
 
 
 export const ALL_BADGES: Badge[] = [

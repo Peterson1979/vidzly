@@ -1,6 +1,7 @@
 
 import { YouTubeVideo } from '../types';
-import { MOCK_API_DELAY, STATIC_YOUTUBE_API_KEY_FALLBACK } from '../constants'; 
+import { MOCK_API_DELAY } from '../constants'; 
+import { YOUTUBE_API_KEY } from '../env'; // Corrected: Import from generated env.ts
 
 // --- MOCK DATA (Used as fallback or by other services) ---
 export const allMockVideos: YouTubeVideo[] = [
@@ -86,10 +87,9 @@ export const allMockVideos: YouTubeVideo[] = [
   }
 ];
 
-
 // --- YOUTUBE API CONFIGURATION ---
-const YOUTUBE_API_KEY_FROM_ENV = process.env.YOUTUBE_API_KEY;
 const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
+const PLACEHOLDER_API_KEY_NOT_SET = 'YOUR_YOUTUBE_API_KEY_NOT_SET'; // Matches build.sh placeholder
 
 // --- HELPER FUNCTIONS ---
 const formatViewCount = (viewCount: string | undefined): string => {
@@ -135,6 +135,13 @@ async function fetchYouTubeData(endpoint: string, params: Record<string, string>
       const errorData = await response.json().catch(() => ({ message: response.statusText }));
       const errorMessage = errorData?.error?.message || response.statusText;
       console.error(`YouTube API Error (${response.status}) for ${url}: ${errorMessage}`, errorData);
+      
+      // Specific check for invalid API key
+      if (errorMessage.toLowerCase().includes("api key not valid") || 
+          errorMessage.toLowerCase().includes("api key invalid") ||
+          errorMessage.toLowerCase().includes("apikeyinvalid")) {
+        throw new Error(`API key invalid: ${errorMessage}`);
+      }
       throw new Error(`API request to ${endpoint} failed with status ${response.status}: ${errorMessage}`);
     }
     return await response.json();
@@ -157,14 +164,25 @@ interface FetchVideosResult {
   hasMore: boolean;
 }
 
+const useMockDataForYoutube = (reason: string): FetchVideosResult => {
+    console.warn(`YouTube Service: ${reason}. Using mock data.`);
+    const mockPageSize = 8; // Default mock page size
+    const paginatedMockVideos = allMockVideos.slice(0, mockPageSize);
+    return {
+        videos: paginatedMockVideos,
+        nextPageToken: allMockVideos.length > mockPageSize ? "mockNextPage" : undefined, // Simplistic mock next page
+        hasMore: allMockVideos.length > mockPageSize,
+    };
+}
+
 export const fetchVideos = async ({
   searchTerm = '',
   pageToken,
   count,
 }: FetchVideosParams): Promise<FetchVideosResult> => {
 
-  if (!YOUTUBE_API_KEY_FROM_ENV || YOUTUBE_API_KEY_FROM_ENV === STATIC_YOUTUBE_API_KEY_FALLBACK) {
-    console.warn(`YouTube API key (YOUTUBE_API_KEY from process.env) is not configured or is the placeholder value. Using mock data for fetchVideos.`);
+  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === PLACEHOLDER_API_KEY_NOT_SET) {
+    console.warn(`YouTube API key is not configured or is the placeholder value (current: '${YOUTUBE_API_KEY}'). Using mock data for fetchVideos.`);
     
     const mockPageSize = count || (searchTerm ? 12 : 8);
     let sourceVideos = allMockVideos;
@@ -177,16 +195,16 @@ export const fetchVideos = async ({
       );
     }
     
-    const startIndex = pageToken ? parseInt(pageToken, 10) : 0;
+    const startIndex = pageToken && pageToken !== "mockNextPage" ? parseInt(pageToken, 10) : (pageToken === "mockNextPage" ? mockPageSize : 0);
     const endIndex = startIndex + mockPageSize;
     const paginatedMockVideos = sourceVideos.slice(startIndex, endIndex);
-    const nextMockPageIndex = endIndex < sourceVideos.length ? endIndex : undefined;
+    const nextMockPageIndex = endIndex < sourceVideos.length ? "mockNextPage" : undefined;
 
     return new Promise(resolve => {
         setTimeout(() => {
             resolve({
                 videos: paginatedMockVideos,
-                nextPageToken: nextMockPageIndex?.toString(),
+                nextPageToken: nextMockPageIndex,
                 hasMore: nextMockPageIndex !== undefined,
             });
         }, MOCK_API_DELAY / 2 );
@@ -209,7 +227,7 @@ export const fetchVideos = async ({
       };
       if (pageToken) searchParams.pageToken = pageToken;
 
-      const searchData = await fetchYouTubeData('search', searchParams, YOUTUBE_API_KEY_FROM_ENV); 
+      const searchData = await fetchYouTubeData('search', searchParams, YOUTUBE_API_KEY); 
       
       const videoIds = searchData.items
         ?.map((item: any) => item.id?.videoId)
@@ -225,7 +243,7 @@ export const fetchVideos = async ({
         id: videoIds,
         maxResults: videoIds.split(',').length.toString(), 
       };
-      const videoDetailsData = await fetchYouTubeData('videos', videoDetailsParams, YOUTUBE_API_KEY_FROM_ENV);
+      const videoDetailsData = await fetchYouTubeData('videos', videoDetailsParams, YOUTUBE_API_KEY);
       videoDataItems = videoDetailsData.items || [];
       nextPageTokenApi = searchData.nextPageToken;
 
@@ -239,7 +257,7 @@ export const fetchVideos = async ({
       };
       if (pageToken) popularParams.pageToken = pageToken;
 
-      const popularData = await fetchYouTubeData('videos', popularParams, YOUTUBE_API_KEY_FROM_ENV);
+      const popularData = await fetchYouTubeData('videos', popularParams, YOUTUBE_API_KEY);
       videoDataItems = popularData.items || [];
       nextPageTokenApi = popularData.nextPageToken;
     }
@@ -263,8 +281,14 @@ export const fetchVideos = async ({
 
   } catch (error) {
     console.error('Failed to fetch videos from YouTube API in fetchVideos:', error);
-     const mockPageSize = count || (searchTerm ? 12 : 8);
-     const mockFallbackVideos = allMockVideos.slice(0, mockPageSize);
-     return { videos: mockFallbackVideos, nextPageToken: undefined, hasMore: mockFallbackVideos.length < allMockVideos.length && mockFallbackVideos.length > 0 };
+    // Fallback to mock data on API error, including invalid key
+    const mockPageSize = count || (searchTerm ? 12 : 8);
+    const mockFallbackVideos = allMockVideos.slice(0, mockPageSize);
+    let hasMoreMock = mockFallbackVideos.length < allMockVideos.length && mockFallbackVideos.length > 0;
+    
+    // Provide a simple mock pagination experience for the fallback
+    const mockNextToken = hasMoreMock ? "mockNextPage" : undefined;
+
+    return { videos: mockFallbackVideos, nextPageToken: mockNextToken, hasMore: hasMoreMock };
   }
 };

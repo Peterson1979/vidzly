@@ -1,5 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { API_KEY } from '../env'; // Corrected: Import from generated env.ts
 import { YouTubeVideo, CuratedFeed, InAppNotificationType } from '../types';
 import { 
     GEMINI_MODEL_TEXT, 
@@ -10,9 +11,19 @@ import {
 import { addInAppNotificationToStore } from './notificationService';
 import { allMockVideos } from './youtubeService'; 
 
-// The API key is assumed to be pre-configured, valid, and accessible via process.env.API_KEY.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+let ai: GoogleGenAI | null = null;
+const PLACEHOLDER_GEMINI_API_KEY_NOT_SET = 'YOUR_GEMINI_API_KEY_NOT_SET'; // Matches build.sh placeholder
 
+if (API_KEY && API_KEY !== PLACEHOLDER_GEMINI_API_KEY_NOT_SET) {
+  try {
+    ai = new GoogleGenAI({ apiKey: API_KEY });
+    console.log("Curation Service: GoogleGenAI initialized with provided API_KEY.");
+  } catch (e) {
+    console.error("Curation Service: Failed to initialize GoogleGenAI, likely due to API key issue:", e);
+  }
+} else {
+  console.warn(`Curation Service: API_KEY is placeholder ('${PLACEHOLDER_GEMINI_API_KEY_NOT_SET}') or not set. Curation features will use mock data.`);
+}
 
 const MOCK_THEMES = [
     "Mind-Bending Science Docs", "Viral Comedy Gold", "Epic Gaming Moments", 
@@ -37,7 +48,10 @@ const generateMockVideosForTheme = (theme: string, videos: YouTubeVideo[], count
 };
 
 async function generateCuratedFeedTheme(existingThemes: string[]): Promise<string> {
-  // 'if (!ai)' check removed as 'ai' is assumed to be initialized.
+  if (!ai) {
+    console.warn("Curation Service: Gemini AI client not initialized. Using mock theme.");
+    return generateMockTheme(existingThemes);
+  }
   try {
     const prompt = `Generate a short, catchy theme title (max 5 words) for a YouTube video playlist. It should be engaging and suitable for a general audience. If possible, avoid these themes: [${existingThemes.join(', ')}]. Examples: 'Epic Movie Soundtracks', 'Viral Comedy Gold', 'Mind-Blowing Tech'. Your response should be ONLY the theme title.`;
     
@@ -55,6 +69,11 @@ async function generateCuratedFeedTheme(existingThemes: string[]): Promise<strin
     return theme;
   } catch (error) {
     console.error("Curation Service: Error generating theme from Gemini:", error);
+    if (error instanceof Error && 
+        (error.message.toLowerCase().includes("api key not valid") || 
+         error.message.toLowerCase().includes("api key is invalid"))) {
+         console.error("Curation Service: API Key is invalid. Using mock theme.");
+    }
     return generateMockTheme(existingThemes);
   }
 }
@@ -65,7 +84,10 @@ interface VideoSelectionResponse {
 }
 
 async function selectVideosForTheme(theme: string, availableVideos: YouTubeVideo[], count: number = 5): Promise<{ videoIds: string[], description: string }> {
-    // 'if (!ai)' check removed.
+    if (!ai) {
+        console.warn("Curation Service: Gemini AI client not initialized. Using mock video selection.");
+        return generateMockVideosForTheme(theme, availableVideos, count);
+    }
     
     const videosForPrompt = availableVideos.map(v => ({ id: v.id, title: v.title, description: v.description.substring(0,100) + "..." }));
 
@@ -117,6 +139,11 @@ Ensure your JSON is valid.
 
     } catch (error) {
         console.error("Curation Service: Error selecting videos from Gemini or parsing JSON:", error);
+        if (error instanceof Error && 
+            (error.message.toLowerCase().includes("api key not valid") || 
+             error.message.toLowerCase().includes("api key is invalid"))) {
+             console.error("Curation Service: API Key is invalid during video selection. Using mock video selection.");
+        }
         return generateMockVideosForTheme(theme, availableVideos, count);
     }
 }
@@ -134,18 +161,37 @@ export async function getLatestCuratedFeed(): Promise<CuratedFeed | null> {
 
     const latestFeed = storedFeeds.length > 0 ? storedFeeds[0] : null;
 
-    if (latestFeed && (Date.now() - latestFeed.generatedAt < CURATED_FEED_STALE_HOURS * 60 * 60 * 1000)) {
+    if (latestFeed && (Date.now() - latestFeed.generatedAt < CURATED_FEED_STALE_HOURS * 60 * 60 * 1000) && API_KEY && API_KEY !== PLACEHOLDER_GEMINI_API_KEY_NOT_SET) { // Only use cache if API key is set
         console.log("Curation Service: Using recent curated feed from localStorage.");
         return latestFeed;
     }
+    
+    // If API key is placeholder, always return a mock or the latest mock from storage
+    if (!API_KEY || API_KEY === PLACEHOLDER_GEMINI_API_KEY_NOT_SET) {
+        console.warn("Curation Service: API Key is placeholder. Generating/returning mock feed.");
+        const mockTheme = generateMockTheme(storedFeeds.map(f=>f.title));
+        const mockSelection = generateMockVideosForTheme(mockTheme, allMockVideos, 5);
+        const mockFeed: CuratedFeed = {
+             id: `mock_curated_${Date.now()}`,
+             title: mockTheme,
+             description: mockSelection.description,
+             videoIds: mockSelection.videoIds,
+             generatedAt: Date.now(),
+             themePrompt: `Mock theme generated: ${mockTheme}`
+        };
+        const updatedFeeds = [mockFeed, ...storedFeeds.filter(f => f.id.startsWith("mock_"))].slice(0,5);
+        localStorage.setItem(CURATED_FEEDS_STORAGE_KEY, JSON.stringify(updatedFeeds));
+        return mockFeed;
+    }
 
-    console.log("Curation Service: Generating new curated feed.");
+
+    console.log("Curation Service: Generating new curated feed using Gemini.");
     const existingThemeTitles = storedFeeds.map(f => f.title);
     const newThemeTitle = await generateCuratedFeedTheme(existingThemeTitles);
     const { videoIds, description } = await selectVideosForTheme(newThemeTitle, allMockVideos, 5);
 
     if (videoIds.length === 0) {
-        console.warn("Curation Service: Failed to select videos for the new theme. Not creating feed.");
+        console.warn("Curation Service: Failed to select videos for the new theme. Not creating feed. Returning latest from cache or null.");
         return latestFeed; 
     }
 
@@ -158,9 +204,9 @@ export async function getLatestCuratedFeed(): Promise<CuratedFeed | null> {
         themePrompt: `Generated theme: ${newThemeTitle}` 
     };
 
-    const updatedFeeds = [newFeed, ...storedFeeds].slice(0, 5); 
+    const updatedFeedsList = [newFeed, ...storedFeeds].slice(0, 5); 
     try {
-        localStorage.setItem(CURATED_FEEDS_STORAGE_KEY, JSON.stringify(updatedFeeds));
+        localStorage.setItem(CURATED_FEEDS_STORAGE_KEY, JSON.stringify(updatedFeedsList));
     } catch (e) {
         console.error("Curation Service: Error saving new curated feed to localStorage", e);
     }
