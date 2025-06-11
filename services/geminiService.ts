@@ -1,27 +1,27 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { API_KEY } from '../env'; // Corrected: Import from generated env.ts
+ // Corrected: Import from generated env.ts
 import { GEMINI_MODEL_TEXT, MOCK_API_DELAY } from '../constants';
 
 let ai: GoogleGenAI | null = null;
 const PLACEHOLDER_GEMINI_API_KEY_NOT_SET = 'YOUR_GEMINI_API_KEY_NOT_SET'; // Matches build.sh placeholder
 
-if (API_KEY && API_KEY !== PLACEHOLDER_GEMINI_API_KEY_NOT_SET) {
+if (window.API_KEY && window.API_KEY !== PLACEHOLDER_GEMINI_API_KEY_NOT_SET) {
   try {
-    ai = new GoogleGenAI({ apiKey: API_KEY });
-    console.log("Gemini Service: GoogleGenAI initialized with provided API_KEY.");
+    ai = new GoogleGenAI({ apiKey: window.API_KEY });
+    console.log("Gemini Service: GoogleGenAI initialized with provided window.API_KEY.");
   } catch (e) {
     console.error("Gemini Service: Failed to initialize GoogleGenAI, likely due to API key issue during construction:", e);
     // ai remains null, and subsequent calls will use mock data or handle the error
   }
 } else {
-  console.warn(`Gemini Service: API_KEY is placeholder ('${PLACEHOLDER_GEMINI_API_KEY_NOT_SET}') or not set. Gemini features will use mock data.`);
+  console.warn(`Gemini Service: window.API_KEY is placeholder ('${PLACEHOLDER_GEMINI_API_KEY_NOT_SET}') or not set. Gemini features will use mock data.`);
 }
 
 export const getVideoSummary = async (title: string, description: string): Promise<string> => {
   if (!ai) {
-    const reason = API_KEY === PLACEHOLDER_GEMINI_API_KEY_NOT_SET 
-                   ? `API_KEY is placeholder ('${PLACEHOLDER_GEMINI_API_KEY_NOT_SET}')`
+    const reason = window.API_KEY === PLACEHOLDER_GEMINI_API_KEY_NOT_SET 
+                   ? `window.API_KEY is placeholder ('${PLACEHOLDER_GEMINI_API_KEY_NOT_SET}')`
                    : "GoogleGenAI client not initialized (API key might be missing or invalid)";
     console.warn(`Gemini Service: ${reason}. Using mock summary for "${title}".`);
     return new Promise((resolve) => {

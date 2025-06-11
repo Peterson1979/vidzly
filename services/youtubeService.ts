@@ -1,7 +1,7 @@
 
 import { YouTubeVideo } from '../types';
 import { MOCK_API_DELAY } from '../constants'; 
-import { YOUTUBE_API_KEY } from '../env'; // Corrected: Import from generated env.ts
+ // Corrected: Import from generated env.ts
 
 // --- MOCK DATA (Used as fallback or by other services) ---
 export const allMockVideos: YouTubeVideo[] = [
@@ -181,8 +181,8 @@ export const fetchVideos = async ({
   count,
 }: FetchVideosParams): Promise<FetchVideosResult> => {
 
-  if (!YOUTUBE_API_KEY || YOUTUBE_API_KEY === PLACEHOLDER_API_KEY_NOT_SET) {
-    console.warn(`YouTube API key is not configured or is the placeholder value (current: '${YOUTUBE_API_KEY}'). Using mock data for fetchVideos.`);
+  if (!window.YOUTUBE_API_KEY || window.YOUTUBE_API_KEY === PLACEHOLDER_API_KEY_NOT_SET) {
+    console.warn(`YouTube API key is not configured or is the placeholder value (current: '${window.YOUTUBE_API_KEY}'). Using mock data for fetchVideos.`);
     
     const mockPageSize = count || (searchTerm ? 12 : 8);
     let sourceVideos = allMockVideos;
@@ -227,7 +227,7 @@ export const fetchVideos = async ({
       };
       if (pageToken) searchParams.pageToken = pageToken;
 
-      const searchData = await fetchYouTubeData('search', searchParams, YOUTUBE_API_KEY); 
+      const searchData = await fetchYouTubeData('search', searchParams, window.YOUTUBE_API_KEY); 
       
       const videoIds = searchData.items
         ?.map((item: any) => item.id?.videoId)
@@ -243,7 +243,7 @@ export const fetchVideos = async ({
         id: videoIds,
         maxResults: videoIds.split(',').length.toString(), 
       };
-      const videoDetailsData = await fetchYouTubeData('videos', videoDetailsParams, YOUTUBE_API_KEY);
+      const videoDetailsData = await fetchYouTubeData('videos', videoDetailsParams, window.YOUTUBE_API_KEY);
       videoDataItems = videoDetailsData.items || [];
       nextPageTokenApi = searchData.nextPageToken;
 
@@ -257,7 +257,7 @@ export const fetchVideos = async ({
       };
       if (pageToken) popularParams.pageToken = pageToken;
 
-      const popularData = await fetchYouTubeData('videos', popularParams, YOUTUBE_API_KEY);
+      const popularData = await fetchYouTubeData('videos', popularParams, window.YOUTUBE_API_KEY);
       videoDataItems = popularData.items || [];
       nextPageTokenApi = popularData.nextPageToken;
     }
