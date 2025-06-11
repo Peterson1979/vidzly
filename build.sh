@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Load .env variables if .env file exists
+if [ -f .env ]; then
+  export $(grep -v '^#' .env | xargs)
+fi
+
 # Create folders if they don't exist
 mkdir -p src
 mkdir -p public
